@@ -1,0 +1,102 @@
+# 1.How many pizzas were ordered?
+select  count(*)from customer_orders ;
+
+# 2.How many unique customer orders were made?
+select  count(distinct (customer_id))from customer_orders ;
+
+
+# 3.How many successful orders were delivered by each runner?
+select
+    r.runner_id,count(r.runner_id) as successfuly_delivered
+from runner_orders as r
+where r.cancellation is null
+group by r.runner_id;
+
+
+# 4.How many of each type of pizza was delivered?
+select nw.pizza_name,count(pizza_id) from( select
+                                               co.*,pn.pizza_name
+                                           from runner_orders as ro
+                                                    inner join customer_orders co on ro.order_id = co.order_id
+                                                    inner join pizza_names pn on co.pizza_id = pn.pizza_id
+                                           where ro.cancellation is null
+                                           order by order_id)nw
+
+group by nw.pizza_name;
+
+
+
+# 5.How many Vegetarian and Meatlovers were ordered by each customer?
+select  customer_id ,pn.pizza_name,count(co.pizza_id) as cnt
+from customer_orders as co
+         inner join pizza_names pn on co.pizza_id = pn.pizza_id
+group by customer_id,pizza_name
+order by customer_id;
+
+
+
+# 6.What was the maximum number of pizzas delivered in a single order?
+select order_id,max(cnt)  max_order from(
+                                            select
+                                                co.order_id, count(pizza_id) as cnt
+                                            from customer_orders as co
+                                                     join runner_orders ro on co.order_id = ro.order_id
+                                            where ro.cancellation is null
+                                            group by order_id)cn
+group by order_id
+order by max_order desc
+limit 1;
+
+# 7.For each customer, how many delivered pizzas had at least 1 change and how many had no changes?
+select
+    co.customer_id,
+    count(case when co.exclusions IS NOT NULL OR co.extras IS NOT NULL THEN 1 END) AS pizzas_with_changes,
+    count(case when co.exclusions IS NULL AND co.extras IS NULL THEN 1 END) AS pizzas_with_no_changes
+from
+    customer_orders co
+        inner join
+    runner_orders ro ON co.order_id = ro.order_id
+where
+    ro.cancellation IS NULL
+group by
+    co.customer_id;
+
+# 8.How many pizzas were delivered that had both exclusions and extras?
+select
+    COUNT(*) AS pizzas_with_both_exclusions_and_extras
+from
+    customer_orders co
+        inner join
+    runner_orders ro ON co.order_id = ro.order_id
+where
+    ro.cancellation IS NULL
+  and co.exclusions IS NOT NULL
+  and co.extras IS NOT NULL;
+
+# 9.What was the total volume of pizzas ordered for each hour of the day?
+select
+    date(co.order_time) as dates,
+    extract(HOUR FROM co.order_time) AS hour_of_day,
+    count(co.pizza_id) AS total_pizzas_ordered
+from
+    customer_orders co
+group by
+    hour_of_day,dates
+order by
+    dates;
+
+
+#10.What was the volume of orders for each day of the week?
+
+select weak, dense_rank() over (partition by weak order by days ) as weak_days, order_count
+from
+    (
+        select weak, days, count(*) as order_count
+        from (select *,
+                     dense_rank() over (order by new_date desc)              as days,
+                     ceiling(dense_rank() over (order by new_date desc) / 3) as weak
+              from (select *, date(order_time) as new_date
+                    from customer_orders
+                    order by order_time desc) as t) as t2
+        group by weak, days
+    ) as t3;
